@@ -1,0 +1,74 @@
+# Local codectl rules. They run offline (--metrics=off, no registry).
+# They complement `codectl holes`: this is where checks that need to look inside a
+# function body live (dataflow, block shape), not the graph topology.
+
+rules:
+  - id: empty-catch
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      empty catch: the error is silently discarded. Log it, rethrow it or comment on
+      why it is safe to ignore.
+    patterns:
+      - pattern: |
+          try { ... } catch ($E) { }
+
+  - id: empty-catch-python
+    languages: [python]
+    severity: WARNING
+    message: >-
+      except with pass: the exception is silently discarded.
+    patterns:
+      - pattern: |
+          try:
+              ...
+          except ...:
+              pass
+
+  - id: sql-injection-taint
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      request input reaches an unparameterized SQL query. Use bound parameters
+      instead of interpolating the string.
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.body
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+    # The sink is the ARGUMENT, not the shape of the call: that way the taint engine
+    # requires the user data to actually reach it. With `query(`...`)` the rule
+    # matched any template literal, even when nothing flowed.
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.query($ARG, ...)
+              - pattern: $DB.raw($ARG, ...)
+              - pattern: $DB.execute($ARG, ...)
+          - focus-metavariable: $ARG
+    pattern-sanitizers:
+      - pattern: parseInt(...)
+      - pattern: Number(...)
+
+  # Known false positive: semgrep does not tell `for await (x of s)` from `for (x of s)`
+  # -- the pattern of the first matches the second, and using it in pattern-not-inside
+  # cancels the whole rule. In a `for await` the await is correct; ignore the finding there.
+  - id: await-in-loop-sequential
+    languages: [typescript, javascript]
+    severity: INFO
+    message: >-
+      await inside a for loop: iterations run serially. If they are independent,
+      Promise.all runs them in parallel. (In a `for await` this is expected: false positive.)
+    patterns:
+      - pattern: await $X
+      - pattern-inside: |
+          for ($A of $B) { ... }
+
+  - id: non-null-assertion-on-env
+    languages: [typescript]
+    severity: WARNING
+    message: >-
+      process.env.X! asserts the variable exists without checking: if it is missing,
+      the failure shows up far from its origin.
+    patterns:
+      - pattern: process.env.$VAR!

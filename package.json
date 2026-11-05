@@ -1,0 +1,14 @@
+{
+  "name": "codectl",
+  "version": "0.1.0",
+  "description": "Index a repo into SQLite and answer callers, calls, blast radius and map queries from the CLI.",
+  "license": "MIT",
+  "author": "Piero Mapelli",
+  "bin": { "codectl": "bin/codectl.js" },
+  "files": ["bin", "lib", "queries", "rules", "requirements.txt", "requirements-scan.txt"],
+  "scripts": {
+    "bootstrap": "bash bin/bootstrap.sh",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=18" }
+}
